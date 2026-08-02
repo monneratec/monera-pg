@@ -59,7 +59,7 @@ export interface Document<T = any, TQueryHelpers = any, DocType = any> {
 }
 
 export interface Query<ResultType = any> extends Promise<ResultType> {
-  lean<LeanResultType = any>(value?: boolean): Query<LeanResultType>;
+  lean<LeanResultType = ResultType>(value?: boolean): Query<LeanResultType>;
   sort(value: AnyObject | string): Query<ResultType>;
   limit(value: number): Query<ResultType>;
   skip(value: number): Query<ResultType>;
@@ -80,9 +80,9 @@ export interface Model<T = any> {
   create(...args: any[]): Promise<any>;
   createCollection(options?: AnyObject): Promise<any>;
   insertMany(...args: any[]): Promise<any>;
-  find<ResultDoc = T>(...args: any[]): Query<any>;
-  findOne<ResultDoc = T>(...args: any[]): Query<any>;
-  findById<ResultDoc = T>(...args: any[]): Query<any>;
+  find<ResultDoc = T>(...args: any[]): Query<Array<ResultDoc & Document<ResultDoc>>>;
+  findOne<ResultDoc = T>(...args: any[]): Query<(ResultDoc & Document<ResultDoc>) | null>;
+  findById<ResultDoc = T>(...args: any[]): Query<(ResultDoc & Document<ResultDoc>) | null>;
   findOneAndUpdate<ResultDoc = T>(...args: any[]): Query<any>;
   findByIdAndUpdate<ResultDoc = T>(...args: any[]): Query<any>;
   findOneAndDelete<ResultDoc = T>(...args: any[]): Query<any>;
