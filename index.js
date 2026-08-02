@@ -128,7 +128,15 @@ function castByDefinition(definition, value) {
     const itemDefinition = definition[0] || Mixed;
     return Array.isArray(value) ? value.map((item) => castByDefinition(itemDefinition, item)) : [];
   }
-  if (isFieldConfig(definition)) return castByDefinition(definition.type, value);
+  if (isFieldConfig(definition)) {
+    let cast = castByDefinition(definition.type, value);
+    if (typeof cast === "string") {
+      if (definition.trim) cast = cast.trim();
+      if (definition.lowercase) cast = cast.toLowerCase();
+      if (definition.uppercase) cast = cast.toUpperCase();
+    }
+    return cast;
+  }
   if (definition === Mixed || definition === Schema.Types.Mixed) return value;
   if ([Date, String, Number, Boolean, Buffer, ObjectId, BsonObjectId, Decimal128].includes(definition)) {
     return castScalar(definition, value);
@@ -663,9 +671,9 @@ class PgQuery {
       return [...new Map(values.map((value) => [JSON.stringify(serialize(value)), value])).values()];
     }
     if (this.operation === "update") return this.modelClass._update(this.payload.filter, this.payload.update, { ...this.options, session: this._session }, this.payload.many);
-    if (this.operation === "findOneAndUpdate") return this.modelClass._findOneAndUpdate(this.payload.filter, this.payload.update, { ...this.options, session: this._session });
+    if (this.operation === "findOneAndUpdate") return this.modelClass._findOneAndUpdate(this.payload.filter, this.payload.update, { ...this.options, lean: this._lean, session: this._session });
     if (this.operation === "delete") return this.modelClass._delete(this.payload.filter, { ...this.options, session: this._session }, this.payload.many, false);
-    if (this.operation === "findOneAndDelete") return this.modelClass._delete(this.payload.filter, { ...this.options, session: this._session }, false, true);
+    if (this.operation === "findOneAndDelete") return this.modelClass._delete(this.payload.filter, { ...this.options, lean: this._lean, session: this._session }, false, true);
     throw new Error(`Unsupported query operation: ${this.operation}`);
   }
 
@@ -949,9 +957,10 @@ class PgConnection extends EventEmitter {
     this.models = Object.create(null);
   }
 
-  model(name, schema) {
+  model(name, schema, collectionOverride) {
     if (this.models[name]) return this.models[name];
     if (!schema) throw new Error(`Schema has not been registered for model "${name}"`);
+    if (collectionOverride) schema.options.collection = collectionOverride;
     const created = createModel(name, schema, this);
     this.models[name] = created;
     return created;
@@ -983,9 +992,9 @@ class PgConnection extends EventEmitter {
 
 const connection = new PgConnection();
 
-function model(name, schema) {
+function model(name, schema, collectionOverride) {
   if (models[name]) return models[name];
-  const created = connection.model(name, schema);
+  const created = connection.model(name, schema, collectionOverride);
   models[name] = created;
   return created;
 }

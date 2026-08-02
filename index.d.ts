@@ -122,13 +122,13 @@ export interface Connection extends EventEmitter {
   name: string;
   models: Record<string, Model<any>>;
   collection(name: string): any;
-  model<T = any>(name: string, schema?: Schema<T>): Model<T>;
+  model<T = any>(name: string, schema?: Schema<T>, collection?: string): Model<T>;
   useDb(name: string): Connection;
   asPromise(): Promise<Connection>;
   close(): Promise<void>;
 }
 
-export function model<T = any>(name: string, schema?: Schema<T>): Model<T>;
+export function model<T = any>(name: string, schema?: Schema<T>, collection?: string): Model<T>;
 export function connect(uri?: string, options?: AnyObject): Promise<typeof mongoose>;
 export function disconnect(): Promise<void>;
 export function createConnection(uri?: string, options?: AnyObject): Connection;
