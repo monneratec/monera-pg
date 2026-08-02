@@ -351,7 +351,7 @@ function nestedObject(path, value) {
   return output;
 }
 
-function buildWhere(filter, startIndex = 2) {
+function buildWhere(filter, startIndex = 3) {
   const params = [];
   const clauses = [];
   let supported = true;
