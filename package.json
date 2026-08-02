@@ -1,0 +1,16 @@
+{
+  "name": "@monera/pg-mongoose",
+  "version": "1.0.0",
+  "description": "PostgreSQL-backed Mongoose compatibility layer for Monera services",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "bson": "^6.10.4",
+    "mingo": "^6.7.1",
+    "pg": "^8.16.3"
+  }
+}
