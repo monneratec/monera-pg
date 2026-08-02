@@ -168,6 +168,7 @@ function applyDefaults(definition, target) {
     if (output[key] === undefined) {
       const defaultValue = fieldDefault(fieldDefinition);
       if (defaultValue !== undefined) output[key] = defaultValue;
+      else if (Array.isArray(fieldDefinition)) output[key] = [];
     }
     const nestedDefinition = fieldDefinition instanceof Schema
       ? fieldDefinition.definition

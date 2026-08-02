@@ -8,6 +8,9 @@
   "engines": {
     "node": ">=20"
   },
+  "scripts": {
+    "test:integration": "node test/integration.js"
+  },
   "dependencies": {
     "bson": "^6.10.4",
     "mingo": "^6.7.1",
