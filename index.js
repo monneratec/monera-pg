@@ -808,6 +808,7 @@ function createModel(modelName, schema, modelConnection) {
     return new ModelDocument(docs).save(options);
   };
   ModelDocument.insertMany = (docs, options = {}) => ModelDocument.create(docs, options);
+  ModelDocument.createCollection = async () => ModelDocument.collection;
   ModelDocument.find = (filter = {}, projection = null, options = {}) => new PgQuery(ModelDocument, "find", { filter, projection, options });
   ModelDocument.findOne = (filter = {}, projection = null, options = {}) => new PgQuery(ModelDocument, "findOne", { filter, projection, options });
   ModelDocument.findById = (id, projection = null, options = {}) => ModelDocument.findOne({ _id: id }, projection, options);
