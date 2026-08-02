@@ -18,6 +18,7 @@ async function main() {
   );
 
   const Account = mongoose.model("AdapterSmoke", schema);
+  await Account.deleteMany({});
   const account = await Account.create({
     email: "  TEST@EXAMPLE.COM ",
     balance: "10",
