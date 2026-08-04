@@ -1,7 +1,7 @@
-# Monera PostgreSQL Mongoose Adapter
+# Monera PostgreSQL Document Adapter
 
-This internal package preserves the Mongoose model and query surface used by
-Monera services while persisting documents in Supabase PostgreSQL.
+This internal package provides the schema, model, query, and transaction surface used
+by Monera services while persisting documents in Supabase PostgreSQL.
 
 Required environment:
 

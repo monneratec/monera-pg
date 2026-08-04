@@ -1,7 +1,7 @@
 {
-  "name": "@monera/pg-mongoose",
+  "name": "@monera/postgres",
   "version": "1.0.0",
-  "description": "PostgreSQL-backed Mongoose compatibility layer for Monera services",
+  "description": "PostgreSQL document-model adapter for Monera services",
   "main": "index.js",
   "types": "index.d.ts",
   "license": "UNLICENSED",
@@ -12,7 +12,6 @@
     "test:integration": "node test/integration.js"
   },
   "dependencies": {
-    "bson": "^6.10.4",
     "mingo": "^6.7.1",
     "pg": "^8.16.3"
   }

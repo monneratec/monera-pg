@@ -2,8 +2,8 @@
 
 require("mingo/init/system");
 
+const { randomBytes } = require("crypto");
 const { EventEmitter } = require("events");
-const { ObjectId: BsonObjectId, Decimal128 } = require("bson");
 const { Aggregator, Query: MingoQuery } = require("mingo");
 const { Pool } = require("pg");
 
@@ -11,23 +11,64 @@ const Mixed = Symbol("Mixed");
 const models = Object.create(null);
 let pool = null;
 
-class ObjectId extends BsonObjectId {
+class ObjectId {
   constructor(value) {
-    if (value instanceof BsonObjectId) {
-      super(value.toHexString());
-      return;
+    const candidate = value instanceof ObjectId
+      ? value.toHexString()
+      : value && typeof value.toHexString === "function"
+        ? value.toHexString()
+        : value == null
+          ? randomBytes(12).toString("hex")
+          : String(value);
+
+    if (!ObjectId.isValid(candidate)) {
+      throw new TypeError("ObjectId value must be a 24 character hexadecimal string");
     }
-    super(value || undefined);
+    this.value = candidate.toLowerCase();
   }
 
   static isValid(value) {
-    if (value instanceof BsonObjectId) return true;
-    if (typeof value !== "string") return false;
-    return /^[a-fA-F0-9]{24}$/.test(value);
+    if (value instanceof ObjectId) return true;
+    return typeof value === "string" && /^[a-fA-F0-9]{24}$/.test(value);
   }
 
   static createFromHexString(value) {
     return new ObjectId(value);
+  }
+
+  equals(value) {
+    if (value instanceof ObjectId) return this.value === value.value;
+    return typeof value === "string" && this.value === value.toLowerCase();
+  }
+
+  toHexString() {
+    return this.value;
+  }
+
+  toString() {
+    return this.value;
+  }
+
+  toJSON() {
+    return this.value;
+  }
+}
+
+class Decimal128 {
+  constructor(value) {
+    this.value = String(value);
+  }
+
+  static fromString(value) {
+    return new Decimal128(value);
+  }
+
+  toString() {
+    return this.value;
+  }
+
+  toJSON() {
+    return this.value;
   }
 }
 
@@ -42,7 +83,7 @@ function serialize(value) {
   if (value === undefined) return undefined;
   if (value === null) return null;
   if (value instanceof Date) return value.toISOString();
-  if (value instanceof BsonObjectId) return value.toHexString();
+  if (value instanceof ObjectId) return value.toHexString();
   if (value instanceof Decimal128) return value.toString();
   if (Buffer.isBuffer(value)) return value.toString("base64");
   if (Array.isArray(value)) return value.map(serialize);
@@ -103,8 +144,8 @@ function valuesEqual(left, right) {
 function castScalar(type, value) {
   if (value == null) return value;
   if (type === Date) return value instanceof Date ? value : new Date(value);
-  if (type === ObjectId || type === BsonObjectId || type === Schema.Types.ObjectId) {
-    return value instanceof BsonObjectId ? new ObjectId(value) : new ObjectId(String(value));
+  if (type === ObjectId || type === Schema.Types.ObjectId) {
+    return value instanceof ObjectId ? value : new ObjectId(String(value));
   }
   if (type === Decimal128 || type === Schema.Types.Decimal128) {
     return value instanceof Decimal128 ? value : Decimal128.fromString(String(value));
@@ -138,7 +179,7 @@ function castByDefinition(definition, value) {
     return cast;
   }
   if (definition === Mixed || definition === Schema.Types.Mixed) return value;
-  if ([Date, String, Number, Boolean, Buffer, ObjectId, BsonObjectId, Decimal128].includes(definition)) {
+  if ([Date, String, Number, Boolean, Buffer, ObjectId, Decimal128].includes(definition)) {
     return castScalar(definition, value);
   }
   if (definition && typeof definition === "object") return castObject(definition, value);
@@ -247,7 +288,7 @@ function normalizeNamespace(value) {
 }
 
 function defaultNamespace() {
-  return normalizeNamespace(process.env.PG_DOCUMENT_NAMESPACE || process.env.MONGOOSE_DB_NAME || "default");
+  return normalizeNamespace(process.env.PG_DOCUMENT_NAMESPACE || "default");
 }
 
 function collectionName(modelName, schema) {
@@ -330,7 +371,7 @@ async function startSession() {
 function normalizeFilter(value) {
   if (value instanceof RegExp) return value;
   if (value instanceof Date) return value.toISOString();
-  if (value instanceof BsonObjectId) return value.toHexString();
+  if (value instanceof ObjectId) return value.toHexString();
   if (value instanceof Decimal128) return Number(value.toString());
   if (Array.isArray(value)) return value.map(normalizeFilter);
   if (value && typeof value === "object") {
@@ -383,7 +424,7 @@ function buildWhere(filter, startIndex = 3) {
         continue;
       }
 
-      if (condition && typeof condition === "object" && !Array.isArray(condition) && !(condition instanceof Date) && !(condition instanceof BsonObjectId)) {
+      if (condition && typeof condition === "object" && !Array.isArray(condition) && !(condition instanceof Date) && !(condition instanceof ObjectId)) {
         const operators = Object.keys(condition).filter((key) => key.startsWith("$"));
         if (operators.length) {
           for (const operator of operators) {
@@ -695,13 +736,22 @@ class PgQuery {
 
 function createModel(modelName, schema, modelConnection) {
   const tableCollection = collectionName(modelName, schema);
+  const hasExplicitIdDefinition = Object.prototype.hasOwnProperty.call(schema.definition, "_id");
+  const idDefinition = schema.definition._id;
+
+  function castDocumentId(value) {
+    if (hasExplicitIdDefinition) {
+      return value == null ? value : castByDefinition(idDefinition, value);
+    }
+    return value instanceof ObjectId ? value : new ObjectId(value == null ? undefined : String(value));
+  }
 
   class ModelDocument {
     constructor(data = {}, state = {}) {
       const defaultsApplied = applyDefaults(schema.definition, { ...data });
       const cast = castObject(schema.definition, defaultsApplied);
       Object.assign(this, cast);
-      this._id = data._id instanceof BsonObjectId ? new ObjectId(data._id) : new ObjectId(data._id ? String(data._id) : undefined);
+      this._id = castDocumentId(data._id);
       this.isNew = state.isNew !== false;
       this.__original = serialize(this.toObject());
       for (const [name, method] of Object.entries(schema.methods)) {
@@ -733,6 +783,9 @@ function createModel(modelName, schema, modelConnection) {
     }
     toJSON() { return serialize(this.toObject()); }
     async save(options = {}) {
+      if (this._id == null || String(this._id).length === 0) {
+        throw new Error(`${modelName} requires an _id value`);
+      }
       await runHooks(schema, "pre", "validate", this);
       await runHooks(schema, "pre", "save", this);
       const now = new Date();
@@ -782,7 +835,7 @@ function createModel(modelName, schema, modelConnection) {
   };
   ModelDocument._lean = (raw) => {
     const data = castObject(schema.definition, deserialize(raw));
-    data._id = new ObjectId(String(raw._id));
+    data._id = castDocumentId(raw._id);
     return data;
   };
   ModelDocument._findRaw = async (filter = {}, session = null, lock = false) => {
@@ -1008,7 +1061,7 @@ async function connect(_uri, _options = {}) {
   connection.name = connection.namespace;
   connection.readyState = 1;
   queueMicrotask(() => connection.emit("connected"));
-  return mongoose;
+  return database;
 }
 
 async function disconnect() {
@@ -1028,7 +1081,7 @@ function isValidObjectId(value) {
   return ObjectId.isValid(value);
 }
 
-const mongoose = {
+const database = {
   Schema,
   Types,
   model,
@@ -1041,8 +1094,8 @@ const mongoose = {
   connection
 };
 
-module.exports = mongoose;
-module.exports.default = mongoose;
+module.exports = database;
+module.exports.default = database;
 module.exports.Schema = Schema;
 module.exports.Types = Types;
 module.exports.ObjectId = ObjectId;

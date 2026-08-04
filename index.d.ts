@@ -2,7 +2,7 @@
 
 import { EventEmitter } from "events";
 
-export as namespace mongoose;
+export as namespace database;
 
 export type AnyObject = Record<string, any>;
 export type FilterQuery<T = any> = AnyObject;
@@ -135,13 +135,13 @@ export interface Connection extends EventEmitter {
 }
 
 export function model<T = any>(name: string, schema?: Schema<T>, collection?: string): Model<T>;
-export function connect(uri?: string, options?: AnyObject): Promise<Mongoose>;
+export function connect(uri?: string, options?: AnyObject): Promise<PostgresDatabase>;
 export function disconnect(): Promise<void>;
 export function createConnection(uri?: string, options?: AnyObject): Connection;
 export function startSession(): Promise<ClientSession>;
 export function isValidObjectId(value: unknown): boolean;
 
-export interface Mongoose {
+export interface PostgresDatabase {
   Schema: typeof Schema;
   Types: typeof Types;
   model: typeof model;
@@ -154,5 +154,5 @@ export interface Mongoose {
   connection: Connection;
 }
 
-declare const mongoose: Mongoose;
-export default mongoose;
+declare const database: PostgresDatabase;
+export default database;
