@@ -145,7 +145,9 @@ function castScalar(type, value) {
   if (value == null) return value;
   if (type === Date) return value instanceof Date ? value : new Date(value);
   if (type === ObjectId || type === Schema.Types.ObjectId) {
-    return value instanceof ObjectId ? value : new ObjectId(String(value));
+    if (value instanceof ObjectId) return value;
+    const asString = String(value);
+    return ObjectId.isValid(asString) ? new ObjectId(asString) : value;
   }
   if (type === Decimal128 || type === Schema.Types.Decimal128) {
     return value instanceof Decimal128 ? value : Decimal128.fromString(String(value));
@@ -743,7 +745,12 @@ function createModel(modelName, schema, modelConnection) {
     if (hasExplicitIdDefinition) {
       return value == null ? value : castByDefinition(idDefinition, value);
     }
-    return value instanceof ObjectId ? value : new ObjectId(value == null ? undefined : String(value));
+    if (value instanceof ObjectId) return value;
+    if (value == null || value === "") return new ObjectId();
+    const asString = String(value);
+    // Application-defined string _ids (e.g. op_..., q_..., swap_...) must pass
+    // through untouched. Only values shaped like a BSON ObjectId are coerced.
+    return ObjectId.isValid(asString) ? new ObjectId(asString) : value;
   }
 
   class ModelDocument {
