@@ -26,6 +26,8 @@ async function main() {
   });
 
   assert.equal(account.email, "test@example.com");
+  assert.ok(account._id instanceof database.Types.ObjectId);
+  assert.match(account._id.toHexString(), /^[a-f0-9]{24}$/);
   assert.deepEqual(account.tags, []);
 
   const found = await Account.findOne({ email: "test@example.com" });
@@ -66,14 +68,44 @@ async function main() {
   await StringIdRecord.deleteMany({});
 
   const quoteDerivedId = "swap_crypto_user_quote:q_1785784765074_d901f1ce:request";
+  const constructed = new StringIdRecord({ _id: quoteDerivedId, status: "constructed" });
+  assert.equal(typeof constructed._id, "string");
+  assert.equal(constructed._id, quoteDerivedId);
+
+  const created = await StringIdRecord.create({ _id: quoteDerivedId, status: "created" });
+  assert.equal(typeof created._id, "string");
+  assert.equal(created._id, quoteDerivedId);
+
+  const stringIdRecord = await StringIdRecord.findById(quoteDerivedId).lean();
+  assert.equal(typeof stringIdRecord._id, "string");
+  assert.equal(stringIdRecord._id, quoteDerivedId);
+  assert.equal(stringIdRecord.status, "created");
+
+  const updateUpsertId = "payout_withdrawal_user_idempotency-key";
   await StringIdRecord.updateOne(
-    { _id: quoteDerivedId },
+    { _id: updateUpsertId },
     { $setOnInsert: { status: "queued" } },
     { upsert: true }
   );
-  const stringIdRecord = await StringIdRecord.findById(quoteDerivedId).lean();
-  assert.equal(stringIdRecord._id, quoteDerivedId);
-  assert.equal(stringIdRecord.status, "queued");
+  const updateUpsertRecord = await StringIdRecord.findById(updateUpsertId).lean();
+  assert.equal(typeof updateUpsertRecord._id, "string");
+  assert.equal(updateUpsertRecord._id, updateUpsertId);
+  assert.equal(updateUpsertRecord.status, "queued");
+
+  const findAndUpdateUpsertId = "refund_operation_user_idempotency-key";
+  await StringIdRecord.findOneAndUpdate(
+    { _id: findAndUpdateUpsertId },
+    { $setOnInsert: { status: "queued" } },
+    { upsert: true, new: true }
+  );
+  const findAndUpdateUpsertRecord = await StringIdRecord.findById(findAndUpdateUpsertId).lean();
+  assert.equal(typeof findAndUpdateUpsertRecord._id, "string");
+  assert.equal(findAndUpdateUpsertRecord._id, findAndUpdateUpsertId);
+  assert.equal(findAndUpdateUpsertRecord.status, "queued");
+
+  const hydrated = await StringIdRecord.findById(quoteDerivedId);
+  assert.equal(typeof hydrated._id, "string");
+  assert.equal(hydrated._id, quoteDerivedId);
 
   await Account.deleteMany({});
   await StringIdRecord.deleteMany({});

@@ -741,9 +741,26 @@ function createModel(modelName, schema, modelConnection) {
   const hasExplicitIdDefinition = Object.prototype.hasOwnProperty.call(schema.definition, "_id");
   const idDefinition = schema.definition._id;
 
+  // Mongo defaults `_id` to ObjectId, but application-defined identifiers are
+  // allowed to be strings. In particular, queue/idempotency records use stable
+  // IDs such as `swap_crypto_<user>_<key>` and must never pass through the
+  // ObjectId constructor. Keep this decision at the adapter boundary so every
+  // model operation (create, upsert, hydrate, lean, and findById) uses the same
+  // cast semantics.
+  function isStringIdDefinition(definition) {
+    if (definition === String) return true;
+    return Boolean(
+      definition &&
+      typeof definition === "object" &&
+      definition.type === String
+    );
+  }
+
   function castDocumentId(value) {
     if (hasExplicitIdDefinition) {
-      return value == null ? value : castByDefinition(idDefinition, value);
+      if (value == null) return value;
+      if (isStringIdDefinition(idDefinition)) return String(value);
+      return castByDefinition(idDefinition, value);
     }
     if (value instanceof ObjectId) return value;
     if (value == null || value === "") return new ObjectId();
