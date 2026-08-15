@@ -307,8 +307,12 @@ function requirePool() {
     if (!connectionString) throw new Error("SUPABASE_DB_URL is required");
     pool = new Pool({
       connectionString,
-      max: Number(process.env.SUPABASE_DB_POOL_MAX || 30),
-      min: Number(process.env.SUPABASE_DB_POOL_MIN || 2),
+      // Supabase session-mode poolers enforce a server-side client limit
+      // (currently 15 for this deployment). Keep the application pool below
+      // that limit by default; deployments can raise it only when their pooler
+      // mode/limit is known to support it.
+      max: Number(process.env.SUPABASE_DB_POOL_MAX || 5),
+      min: Number(process.env.SUPABASE_DB_POOL_MIN || 1),
       idleTimeoutMillis: Number(process.env.SUPABASE_DB_IDLE_TIMEOUT_MS || 10000),
       connectionTimeoutMillis: Number(process.env.SUPABASE_DB_CONNECT_TIMEOUT_MS || 5000),
       query_timeout: Number(process.env.SUPABASE_DB_QUERY_TIMEOUT_MS || 30000),
@@ -366,7 +370,7 @@ class PgSession {
 }
 
 async function startSession() {
-  const client = await requirePool().connect();
+  const client = await connectWithCapacityRetry();
   return new PgSession(client);
 }
 
@@ -574,12 +578,34 @@ function duplicateError(collection, field) {
   return error;
 }
 
+function isPoolCapacityError(error) {
+  return /EMAXCONNSESSION|max clients reached|too many clients|remaining connection slots/i.test(
+    String(error?.code || '') + ' ' + String(error?.message || error || '')
+  );
+}
+
+async function connectWithCapacityRetry() {
+  const attempts = Math.max(1, Number(process.env.SUPABASE_DB_CONNECT_RETRY_ATTEMPTS || 3));
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await requirePool().connect();
+    } catch (error) {
+      lastError = error;
+      if (!isPoolCapacityError(error) || attempt === attempts - 1) throw error;
+      const delayMs = Math.min(500, 100 * (attempt + 1));
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  throw lastError;
+}
+
 async function withClient(session, transaction, fn) {
   if (session?.client) {
     if (transaction && !session.inTransaction) await session.startTransaction();
     return fn(session.client);
   }
-  const client = await requirePool().connect();
+  const client = await connectWithCapacityRetry();
   try {
     if (transaction) await client.query("begin");
     const result = await fn(client);
@@ -1079,8 +1105,12 @@ function model(name, schema, collectionOverride) {
 }
 
 async function connect(_uri, _options = {}) {
-  requirePool();
-  await pool.query("select 1");
+  const client = await connectWithCapacityRetry();
+  try {
+    await client.query("select 1");
+  } finally {
+    client.release();
+  }
   connection.namespace = defaultNamespace();
   connection.name = connection.namespace;
   connection.readyState = 1;
