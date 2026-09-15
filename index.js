@@ -317,7 +317,9 @@ function requirePool() {
       connectionTimeoutMillis: Number(process.env.SUPABASE_DB_CONNECT_TIMEOUT_MS || 5000),
       query_timeout: Number(process.env.SUPABASE_DB_QUERY_TIMEOUT_MS || 30000),
       statement_timeout: Number(process.env.SUPABASE_DB_STATEMENT_TIMEOUT_MS || 30000),
-      ssl: { rejectUnauthorized: process.env.SUPABASE_DB_SSL_STRICT === "true" }
+      ssl: process.env.SUPABASE_DB_SSL === "false"
+        ? false
+        : { rejectUnauthorized: process.env.SUPABASE_DB_SSL_STRICT === "true" }
     });
     pool.on("error", (error) => connection.emit("error", error));
   }
