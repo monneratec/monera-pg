@@ -441,10 +441,25 @@ function buildWhere(filter, startIndex = 3) {
               local.push(`${path === "_id" ? "id" : `data #> '${jsonPath(path)}'`} is ${operand ? "not " : ""}null`);
             } else if (operator === "$in" || operator === "$nin") {
               const values = (Array.isArray(operand) ? operand : []).map(serialize);
+              if (operator === "$nin") {
+                const excluded = values.map((value) => {
+                  if (value === null) return `${column} is null`;
+                  if (value && typeof value === "object") { supported = false; return "false"; }
+                  return `coalesce(data @> ${add(JSON.stringify(nestedObject(path, value)))}::jsonb, false)`;
+                });
+                local.push(excluded.length ? `not (${excluded.join(" or ")})` : "true");
+                continue;
+              }
               const token = add(values.map(String));
               local.push(`${column} ${operator === "$nin" ? "<> all" : "= any"}(${token}::text[])`);
             } else if (["$gt", "$gte", "$lt", "$lte", "$ne"].includes(operator)) {
               const serialized = serialize(operand);
+              if (operator === "$ne") {
+                if (serialized === null) local.push(`${column} is not null`);
+                else if (serialized && typeof serialized === "object") supported = false;
+                else local.push(`not coalesce(data @> ${add(JSON.stringify(nestedObject(path, serialized)))}::jsonb, false)`);
+                continue;
+              }
               const token = add(serialized);
               const sqlOperator = { $gt: ">", $gte: ">=", $lt: "<", $lte: "<=", $ne: "<>" }[operator];
               if (operand instanceof Date) local.push(`(${column})::timestamptz ${sqlOperator} ${token}::timestamptz`);

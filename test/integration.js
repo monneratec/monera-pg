@@ -40,6 +40,14 @@ async function main() {
   const updated = await Account.findById(account._id).lean();
   assert.equal(updated.balance, "15");
   assert.deepEqual(updated.tags, ["verified"]);
+  assert.equal(await Account.countDocuments({ 'metadata.missing': { $ne: true } }), 1);
+  assert.equal(await Account.countDocuments({ 'metadata.missing': { $nin: ['completed'] } }), 1);
+  assert.equal(await Account.countDocuments({ 'metadata.missing': { $ne: null } }), 0);
+  assert.equal(await Account.countDocuments({ 'metadata.missing': { $nin: [null] } }), 0);
+  await Account.updateOne({ _id: account._id }, { $set: { 'metadata.review': false } });
+  assert.equal(await Account.countDocuments({ 'metadata.review': { $ne: true } }), 1);
+  await Account.updateOne({ _id: account._id }, { $set: { 'metadata.review': true } });
+  assert.equal(await Account.countDocuments({ 'metadata.review': { $ne: true } }), 0);
 
   const session = await database.startSession();
   await session.withTransaction(async () => {
